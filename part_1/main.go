@@ -27,11 +27,21 @@ type DFA struct {
 	Classifier  func(rune) class
 }
 
-func ClassifyNonDigits(r rune) class {
+func ClassifyDigits(r rune) class {
 	if unicode.IsDigit(r) {
 		return ClassDigit
 	}
 	return ClassNotDigit
+}
+
+func ClassifySpacesCommas(r rune) class {
+	if unicode.IsSpace(r) {
+		return ClassSpace
+	}
+	if r == ',' {
+		return ClassComma
+	}
+	return ClassOther
 }
 
 func NewNonDigitDFA() DFA {
@@ -44,7 +54,22 @@ func NewNonDigitDFA() DFA {
 			{0, ClassNotDigit}: 1,
 			{1, ClassNotDigit}: 1,
 		},
-		Classifier: ClassifyNonDigits,
+		Classifier: ClassifyDigits,
+	}
+}
+
+func NewCommaDFA() DFA {
+	return DFA{
+		StartState: 0,
+		FinalStates: map[int]struct{}{
+			1: {},
+		},
+		Transitions: map[Key]int{
+			{0, ClassSpace}: 0,
+			{0, ClassComma}: 1,
+			{1, ClassSpace}: 1,
+		},
+		Classifier: ClassifySpacesCommas,
 	}
 }
 
@@ -58,7 +83,7 @@ func NewDigitDFA() DFA {
 			{0, ClassDigit}: 1,
 			{1, ClassDigit}: 1,
 		},
-		Classifier: ClassifyNonDigits,
+		Classifier: ClassifyDigits,
 	}
 }
 
@@ -108,7 +133,7 @@ func (dfa DFA) Split(text string) []string {
 	cut := 0
 	res := make([]string, 0, 8)
 	for i := 0; i < len(runeText); {
-		if ln, ok := dfa.MatchAt(runeText, i); ok {
+		if ln, ok := dfa.MatchAt(runeText, i); ok && ln > 0 {
 			res = append(res, string(runeText[cut:i]))
 			i += ln
 			cut = i
@@ -133,9 +158,11 @@ func main() {
 
 	nND := NewNonDigitDFA()
 	nD := NewDigitDFA()
+	cD := NewCommaDFA()
 
 	run(`Паттерн 1: \D+`, nND, inputs)
 	run(`Паттерн 2: \d+`, nD, inputs)
+	run(`Паттерн 3: \s*,\s*`, cD, []string{",", " , ", "", " ", ",,", "a,"})
 
 	for i := range 4 {
 		ln, bl := nND.MatchAt([]rune("12ab3"), i)
@@ -145,5 +172,9 @@ func main() {
 	ninputs := []string{"12ab3", "a12b", "ab", "1 One, 2 Two, 3 Three is good."}
 	for _, i := range ninputs {
 		fmt.Printf("%s - %q\n", i, nND.Split(i))
+	}
+	cinputs := []string{"a,b", "яблоко , груша,слива", ",", " ,", "     ,    ", "a, ,b"}
+	for _, i := range cinputs {
+		fmt.Printf("%s - %q\n", i, cD.Split(i))
 	}
 }
